@@ -105,7 +105,7 @@
     .tool-head .t-accent { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); flex: none; }
     .tool-head .t-name { font-weight: 800; color: var(--forest); font-size: .95rem; }
     .tool-head .t-sub { font-size: .72rem; color: var(--moss); opacity: .7; margin-left: .3rem; }
-    .tool-body { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
+    .tool-body { flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 1.2rem; }
     .plateau-wrap { width: 100%; max-width: 520px; }
 
     /* ─── Le plateau (repris du jeu EVAD) ─── */
@@ -127,18 +127,16 @@
     .ter-cell.alt { --c: #b5cea7; }
     .ter-cell.r1 { --h: 1.5px; }
     .ter-grid.live .ter-cell:hover { transform: translateZ(5px); box-shadow: inset 0 0 0 1px rgba(13,43,34,.28); }
-    /* case posée, en GRIS PROJETÉ (le projet rêvé) : un bloc surélevé neutre */
-    .ter-cell.projete { --h: 7px; --c: #d3dbd4; --cd: #c2ccc4; --cd2: #b1bcb3;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 0 0 0 1px rgba(20,67,46,.14); }
-    .ter-cell.projete::before { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: var(--h);
+    /* case posée : un bloc-voxel coloré par le type de l'espace */
+    .ter-cell.fill { --h: 8px; --c: #cfd8d0; --cd: #b7c2b9; --cd2: #a6b2a8;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 1px 0 0 rgba(255,255,255,.28), inset 0 0 0 1px rgba(20,67,46,.14); }
+    .ter-cell.fill.flat { --h: 0px; box-shadow: inset 0 0 0 1px rgba(20,67,46,.14); }   /* jardin : au raz du sol */
+    .ter-cell.fill::before { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: var(--h);
       transform-origin: top; transform: rotateX(-90deg); pointer-events: none; background: linear-gradient(0deg,var(--cd2),var(--cd) 70%); }
-    .ter-cell.projete::after { content: ''; position: absolute; top: 0; bottom: 0; left: 100%; width: var(--h);
+    .ter-cell.fill::after { content: ''; position: absolute; top: 0; bottom: 0; left: 100%; width: var(--h);
       transform-origin: left; transform: rotateY(90deg); pointer-events: none; background: var(--cd2); }
     /* case RÉALISÉE, en vert (arrive à l'étape 5) */
     .ter-cell.vert { --c: #69bf87; --cd: #4fae73; --cd2: #3f9a63; }
-    /* Deva pointe : pulsation discrète quand elle vient de poser une case */
-    .ter-cell.pulse { animation: cellPulse 1.1s ease 2; }
-    @keyframes cellPulse { 0%,100% { box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 0 0 0 1px rgba(20,67,46,.14); } 50% { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); } }
     .tc-ic { display: inline-block; transform: rotateZ(calc(-1*var(--rot,0deg))) rotateX(-54deg) scale(1.25); transform-origin: 50% 90%; pointer-events: none; filter: drop-shadow(0 2px 1.5px rgba(0,0,0,.3)); }
     /* étiquette flottante du nom de l'espace */
     .ter-label { position: absolute; left: 50%; top: 50%; white-space: nowrap;
@@ -153,6 +151,36 @@
     .ter-zoom { position: absolute; right: .55rem; top: .55rem; display: flex; gap: .3rem; z-index: 5; }
     .ter-zoom button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--moss); font-weight: 800; cursor: pointer; font-family: var(--font); font-size: 1rem; }
     .ter-zoom button:hover { border-color: var(--fern); }
+
+    /* ─── Légende des espaces (cliquable) ─── */
+    .ter-legend { margin-top: .9rem; display: flex; flex-direction: column; gap: .3rem; }
+    .ter-leg { display: flex; align-items: center; gap: .45rem; width: 100%; border: 1.5px solid var(--line); background: #fff;
+      border-radius: 10px; padding: .4rem .55rem; cursor: pointer; font-family: var(--font); font-size: .74rem; color: var(--ink); transition: border-color .12s, background .12s; }
+    .ter-leg:hover { border-color: var(--fern); }
+    .ter-leg.on { border-color: var(--forest); background: color-mix(in srgb, var(--fern) 12%, #fff); }
+    .ter-leg .tl-sw { width: 13px; height: 13px; border-radius: 3px; flex: none; box-shadow: inset 0 0 0 1px rgba(20,67,46,.2); }
+    .ter-leg .tl-nm { font-weight: 700; }
+    .ter-leg .tl-n { margin-left: auto; color: var(--moss); font-variant-numeric: tabular-nums; }
+    .ter-leg.none .tl-n { opacity: .5; }
+    .ter-leg .tl-x { flex: none; color: var(--moss); opacity: .5; font-size: .8rem; padding: 0 .1rem; }
+    .ter-leg .tl-x:hover { opacity: 1; color: #c0392b; }
+
+    /* ─── Palette des espaces (sous le plateau) ─── */
+    .palette { margin-top: 1rem; }
+    .pal-hint { font-size: .74rem; color: var(--moss); background: var(--cream); border-radius: 10px; padding: .5rem .65rem; margin-bottom: .6rem; }
+    .pal-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .pal-chip { display: inline-flex; align-items: center; gap: .3rem; border: 1.5px solid var(--line); background: #fff; color: var(--forest);
+      border-radius: 100px; padding: .4rem .7rem; font-family: var(--font); font-size: .76rem; font-weight: 650; cursor: pointer; transition: border-color .12s, transform .1s; }
+    .pal-chip:hover { border-color: var(--fern); }
+    .pal-chip:active { transform: scale(.96); }
+    .pal-chip .pc-ic { font-size: .95rem; }
+    /* Deva pointe (pull) : liseré d'accent doux qui respire */
+    .pal-chip.suggested { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); animation: palPulse 1.8s ease-in-out infinite; }
+    @keyframes palPulse { 0%,100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent); } }
+    .pal-tools { display: flex; gap: .4rem; margin-top: .7rem; }
+    .pal-tools button { flex: 1; border: 1.5px solid var(--line); background: #fff; color: var(--moss); border-radius: 10px; padding: .5rem; font-family: var(--font); font-size: .74rem; font-weight: 700; cursor: pointer; }
+    .pal-tools button:hover { border-color: var(--fern); }
+    .pal-tools button.on { border-color: var(--gold); background: #fff7e6; color: #a06c00; }
 
     /* ─── Repli mobile : Deva en bandeau haut, l'outil dessous ─── */
     @media (max-width: 720px) {

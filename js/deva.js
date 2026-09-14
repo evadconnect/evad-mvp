@@ -16,7 +16,10 @@ const projet = {
   intention: null,   // 'creer' | 'visiter' | 'solutions' | 'rejoindre'
   nom: '',
   vue: { rot: 24, zoom: 1 },
-  zones: [],         // { id, type, ic, label, cells:[i...], anchor:i, statut:'projete'|'realise' }
+  spaces: [],        // { id, type, ic, name }
+  terrainGrid: null, // Array(120) : index de case -> index d'espace, ou -1
+  paint: { sel: null, mode: null },  // sel = espace en cours de peinture ; mode = 'erase' | null
+  suggested: null,   // type d'espace que Deva pointe (pull)
 };
 
 const thread   = document.getElementById('thread');
@@ -190,28 +193,39 @@ async function ouvrirEsquisse() {
   document.body.dataset.mode = 'esquisse';
   document.getElementById('mode-label').textContent = 'Esquisse';
   document.getElementById('tool-panel').setAttribute('aria-hidden', 'false');
-  await devaSay('Voilà ta maquette, encore vide. Je te pose quelques questions et je la dessine au fur et à mesure.', 850);
+  await devaSay('Voilà ta maquette, encore vide. Dis-m\'en un peu plus et tu vas la dessiner toi-même.', 850);
   stepNomLieu();
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Étape 3 — Deva mène l'entretien et remplit la maquette. Les espaces
-   se posent en GRIS PROJETÉ (le projet rêvé). Deva questionne le
-   projet, jamais la personne.
+   Étape 3 — Deva mène l'entretien ; la maquette se remplit via la
+   PALETTE d'espaces sous le plateau : on choisit un espace et on pose
+   autant de blocs qu'on veut. Deva invite et pointe (pull), l'humain
+   personnalise. Deva questionne le projet, jamais la personne.
    ═══════════════════════════════════════════════════════════════ */
 
-// Les espaces que Deva peut poser (esquisse basse fidélité)
-const ESPACES = [
-  { type: 'jardin',  ic: '🌿', label: 'Jardin' },
-  { type: 'cuisine', ic: '🍳', label: 'Cuisine' },
-  { type: 'atelier', ic: '🔨', label: 'Atelier' },
-  { type: 'cafe',    ic: '☕', label: 'Café' },
+// Liste complète des types d'espaces (repris du jeu / fiche lieu) : [type, label, icône]
+const SPACE_TYPES = [
+  ['cuisine', 'Cuisine', '🍳'], ['cafe_bar', 'Café / Bar', '☕'], ['cantine', 'Cantine / Resto', '🍽️'],
+  ['coworking', 'Coworking', '💻'], ['salle_reunion', 'Salle de réunion', '🗣️'], ['atelier', 'Atelier', '🔧'],
+  ['fablab', 'FabLab', '⚙️'], ['scene', 'Scène / Événements', '🎪'], ['expo', 'Espace expo', '🖼️'],
+  ['boutique', 'Boutique', '🛍️'], ['bibliotheque', 'Bibliothèque', '📚'], ['formation', 'Salle de formation', '🎓'],
+  ['jardin', 'Jardin', '🌿'], ['serre', 'Serre', '🌱'], ['compost', 'Compost / Déchets', '♻️'],
+  ['hebergement', 'Hébergement', '🛏️'], ['sport', 'Sport / Bien-être', '🤸'], ['meditation', 'Méditation / Yoga', '🧘'],
+  ['stockage', 'Stockage', '📦'], ['autre', 'Autre', '✨'],
 ];
-// Emplacements successifs sur la grille 12×10 (blocs 2 lignes × 3 colonnes)
-const SLOTS = [
-  { r: [1, 2], c: [1, 3] }, { r: [1, 2], c: [6, 8] },
-  { r: [5, 6], c: [1, 3] }, { r: [5, 6], c: [6, 8] },
-];
+const TYPE_META = Object.fromEntries(SPACE_TYPES.map(([t, l, i]) => [t, { label: l, ic: i }]));
+// Couleur réaliste par type : [teinte, saturation, décalage de luminosité] (repris du jeu)
+const TYPE_COLORS = {
+  jardin: [115, 45, 0], serre: [200, 12, 0], compost: [26, 35, -8],
+  cuisine: [30, 75, 0], cantine: [46, 70, 0], cafe_bar: [22, 45, 0],
+  atelier: [10, 45, -4], fablab: [250, 40, 0], stockage: [0, 0, -4],
+  coworking: [210, 55, 0], salle_reunion: [225, 35, 0], formation: [190, 45, 0], bibliotheque: [38, 40, 0],
+  scene: [330, 55, 0], expo: [280, 45, 0], boutique: [345, 60, 0],
+  hebergement: [260, 30, 0], sport: [170, 50, 0], meditation: [300, 30, 0], autre: [60, 25, 0],
+};
+
+let devaAReagi = false;
 
 async function stepNomLieu() {
   await devaSay('Pour commencer, comment s\'appelle ton lieu, ou ton projet ?', 650);
@@ -226,55 +240,32 @@ async function stepNomLieu() {
       projet.nom = v;
       bubble('me', v);
       document.getElementById('tool-sub').textContent = v;
-      stepEspaces(true);
+      stepInviteEspaces();
     });
     box.appendChild(f);
     setTimeout(() => f.querySelector('input').focus(), 80);
   });
 }
 
-async function stepEspaces(first) {
-  const restants = ESPACES.filter(e => !projet.zones.some(z => z.type === e.type));
-  const plein = projet.zones.length >= SLOTS.length;
-  if (first) await devaSay(`Bien. Maintenant, qu'est-ce qu'on trouvera dans <strong>${escapeHtml(projet.nom)}</strong> ? Choisis un espace, je le pose sur la maquette.`, 800);
-  else await devaSay(plein ? 'La maquette est bien remplie. On s\'arrête là ?' : 'Un autre espace, ou on s\'arrête là ?', 650);
+async function stepInviteEspaces() {
+  await devaSequence([
+    [`Bien. Pour dessiner <strong>${escapeHtml(projet.nom)}</strong>, regarde la <strong>palette des espaces</strong> sous le plateau.`, 800],
+    'Choisis un espace, puis pose autant de blocs que tu veux sur la grille. Un jardin pour commencer ?'
+  ]);
+  projet.suggested = 'jardin';   // pull : Deva pointe le jardin dans la palette
+  render();
+  clearComposer();
+}
 
-  if (!restants.length || plein) {
-    showChips(box => box.appendChild(chip('btn-ghost', '✓', 'Terminer la maquette', '', finEsquisse)));
-    return;
+// Deva réagit une fois, doucement, quand les premiers blocs sont posés (pull, pas push)
+function devaPeutReagir() {
+  if (devaAReagi) return;
+  if (terrainUsed() > 0) {
+    devaAReagi = true;
+    const sp = projet.spaces[projet.paint.sel] || projet.spaces.find((_, i) => terrainCount(i) > 0);
+    const nm = sp ? sp.name.toLowerCase() : 'ton espace';
+    devaSay(`Voilà, ${nm} prend sa place. Ajoute d'autres espaces quand tu veux, tu personnalises leur taille bloc par bloc.`, 500);
   }
-  showChips(box => {
-    restants.forEach(e => box.appendChild(chip('btn-primary', e.ic, e.label, 'Le poser sur la maquette', () => poserEspace(e))));
-    if (projet.zones.length) box.appendChild(chip('btn-ghost', '✓', 'Terminer', '', finEsquisse));
-  });
-}
-
-async function poserEspace(e) {
-  bubble('me', e.label);
-  const slot = SLOTS[projet.zones.length];
-  const cells = [];
-  for (let r = slot.r[0]; r <= slot.r[1]; r++) for (let c = slot.c[0]; c <= slot.c[1]; c++) cells.push(r * TER_COLS + c);
-  const zone = { id: 'z' + projet.zones.length, type: e.type, ic: e.ic, label: e.label, cells, anchor: cells[0], statut: 'projete' };
-  projet.zones.push(zone);
-  renderPlateau();
-  pulseZone(zone);                    // Deva pointe : pulsation discrète
-  await devaSay(`Je pose le <strong>${e.label.toLowerCase()}</strong> sur la maquette, en gris pour l'instant : c'est le projet rêvé.`, 800);
-  stepEspaces(false);
-}
-
-async function finEsquisse() {
-  const n = projet.zones.length;
-  await devaSay(`Belle maquette : ${n} espace${n > 1 ? 's' : ''} posé${n > 1 ? 's' : ''}, en gris projeté.`, 700);
-  await devaSay('À la prochaine étape, on reliera un espace à une solution du Commun, puis une action validée le fera passer au vert.', 850);
-}
-
-function pulseZone(zone) {
-  requestAnimationFrame(() => {
-    zone.cells.forEach(i => {
-      const cell = document.querySelector(`.ter-grid.live .ter-cell[data-i="${i}"]`);
-      if (cell) { cell.classList.add('pulse'); setTimeout(() => cell.classList.remove('pulse'), 2400); }
-    });
-  });
 }
 
 function retourAccueil() {
@@ -288,50 +279,164 @@ function retourAccueil() {
 document.getElementById('back-btn').addEventListener('click', retourAccueil);
 
 /* ═══════════════════════════════════════════════════════════════
-   Le plateau (moteur repris du jeu EVAD, grille 12×10). Vide pour
-   l'instant : poser des cases arrive à l'étape 3.
+   Le plateau : moteur de peinture repris du jeu EVAD (grille 12×10).
+   On choisit un espace dans la palette, puis on pose autant de blocs
+   qu'on veut au clic / glissé. Espaces colorés par type.
    ═══════════════════════════════════════════════════════════════ */
 const TER_COLS = 12, TER_ROWS = 10, TER_CELLS = TER_COLS * TER_ROWS;
 
-function plateauHTML() {
-  const { rot, zoom } = projet.vue;
+function terrainGrid() {
+  if (!Array.isArray(projet.terrainGrid) || projet.terrainGrid.length !== TER_CELLS)
+    projet.terrainGrid = new Array(TER_CELLS).fill(-1);
+  return projet.terrainGrid;
+}
+function terrainCount(idx) { const g = terrainGrid(); let n = 0; for (let i = 0; i < TER_CELLS; i++) if (g[i] === idx) n++; return n; }
+function terrainUsed() { const g = terrainGrid(); let n = 0; for (let i = 0; i < TER_CELLS; i++) if (g[i] >= 0) n++; return n; }
+function terrainDropSpace(idx) { const g = terrainGrid(); for (let i = 0; i < TER_CELLS; i++) { if (g[i] === idx) g[i] = -1; else if (g[i] > idx) g[i]--; } }
+
+// Couleur vive d'un espace (légende, pastilles)
+function spaceColor(idx, l) {
+  const sp = projet.spaces[idx], c = TYPE_COLORS[sp && sp.type], base = (l || 60);
+  if (!c) return `hsl(${Math.round(idx * 137.508) % 360} 55% ${base}%)`;
+  let dup = 0; for (let i = 0; i < idx; i++) { const o = projet.spaces[i]; if (o && o.type === sp.type) dup++; }
+  const L = Math.max(30, Math.min(80, base + c[2] - dup * 7));
+  return `hsl(${c[0]} ${c[1]}% ${L}%)`;
+}
+// Couleur de la plateforme (posée sur le plateau) : teinte du type, plus claire
+function platColor(idx, l) {
+  const sp = projet.spaces[idx], c = TYPE_COLORS[sp && sp.type];
+  const hue = c ? c[0] : (Math.round(idx * 137.508) % 360), sat = c ? Math.min(60, c[1]) : 45;
+  return `hsl(${hue} ${sat}% ${l || 70}%)`;
+}
+
+/* ── Rendu : plateau + légende + palette ── */
+function renderPlateau() {
+  const el = document.getElementById('tool-body'); if (!el) return;
+  el.innerHTML = `<div class="plateau-wrap">${terWrapHTML()}${legendHTML()}${paletteHTML()}</div>`;
+  bindPlateau(el.querySelector('.ter-grid'));
+}
+
+function terWrapHTML() {
+  const { rot, zoom } = projet.vue, g = terrainGrid();
   const hash = i => { let x = (i + 7) * 2654435761; x ^= x >>> 13; return (x * 2246822519) >>> 0; };
-  // carte des cases occupées : index -> { zone, anchor:bool }
-  const occ = new Map();
-  projet.zones.forEach(z => z.cells.forEach(i => occ.set(i, { zone: z, anchor: i === z.anchor })));
+  const first = new Map();
+  for (let i = 0; i < TER_CELLS; i++) { const v = g[i]; if (v >= 0 && !first.has(v)) first.set(v, i); }
   let cells = '';
   for (let i = 0; i < TER_CELLS; i++) {
-    const o = occ.get(i);
+    const v = g[i], sp = v >= 0 ? projet.spaces[v] : null;
     let cls = 'ter-cell' + ((((i % TER_COLS) + ((i / TER_COLS) | 0)) % 2) ? ' alt' : '');
-    let inner = '';
-    if (o) {
-      cls += ' projete' + (o.zone.statut === 'realise' ? ' vert' : '');
-      if (o.anchor) inner = `<span class="tc-ic">${o.zone.ic}</span><span class="ter-label">${escapeHtml(o.zone.label)}</span>`;
+    let inner = '', style = '';
+    if (sp) {
+      cls += ' fill' + (sp.type === 'jardin' ? ' flat' : '');
+      style = ` style="--c:${platColor(v)};--cd:${platColor(v, 58)};--cd2:${platColor(v, 48)}"`;
+      if (first.get(v) === i) inner = `<span class="tc-ic">${sp.ic}</span><span class="ter-label">${escapeHtml(sp.name)}</span>`;
     } else if (hash(i) % 7 === 0) cls += ' r1';
-    cells += `<div class="${cls}" data-i="${i}">${inner}</div>`;
+    cells += `<div class="${cls}" data-i="${i}"${style}>${inner}</div>`;
   }
-  return `<div class="plateau-wrap"><div class="ter-wrap">
+  return `<div class="ter-wrap">
       <div class="ter-grid live" style="--rot:${rot}deg;--zoom:${zoom}">${cells}</div>
       <div class="ter-dusk"></div><span class="ter-fly">🦋</span>
       <div class="ter-zoom"><button onclick="plateauZoom(-1)" title="Réduire">−</button><button onclick="plateauZoom(1)" title="Agrandir">+</button></div>
-    </div></div>`;
+    </div>`;
 }
-function renderPlateau() {
-  const el = document.getElementById('tool-body'); if (!el) return;
-  el.innerHTML = plateauHTML();
-  bindPlateau(el.querySelector('.ter-grid'));
+
+function legendHTML() {
+  if (!projet.spaces.length) return '';
+  return `<div class="ter-legend">${projet.spaces.map((sp, idx) => {
+    const n = terrainCount(idx), on = projet.paint.sel === idx;
+    return `<button class="ter-leg${on ? ' on' : ''}${n ? '' : ' none'}" onclick="selectEspace(${idx})">
+      <span class="tl-sw" style="background:${spaceColor(idx)}"></span>
+      <span class="tl-nm">${sp.ic} ${escapeHtml(sp.name)}</span>
+      <span class="tl-n">${n} bloc${n > 1 ? 's' : ''} / ${TER_CELLS}</span>
+      <span class="tl-x" title="Retirer" onclick="event.stopPropagation();retirerEspace(${idx})">✕</span>
+    </button>`;
+  }).join('')}</div>`;
 }
+
+function paletteHTML() {
+  const sel = projet.paint.sel != null ? projet.spaces[projet.paint.sel] : null;
+  const hint = projet.paint.mode === 'erase' ? '🧽 Efface des blocs en cliquant sur le plateau'
+    : sel ? `Pose des blocs de <b>${escapeHtml(sel.name)}</b> sur le plateau`
+    : 'Choisis un espace, puis pose des blocs sur le plateau';
+  return `<div class="palette">
+    <div class="pal-hint">${hint}</div>
+    <div class="pal-chips">${SPACE_TYPES.map(([t, l, ic]) =>
+      `<button class="pal-chip${projet.suggested === t ? ' suggested' : ''}" onclick="ajouterEspace('${t}')" title="Ajouter ${l}"><span class="pc-ic">${ic}</span>${l}</button>`).join('')}</div>
+    <div class="pal-tools">
+      <button class="${projet.paint.mode === 'erase' ? 'on' : ''}" onclick="gomme()">🧽 Gomme</button>
+      <button onclick="toutEffacer()">🗑️ Tout effacer</button>
+    </div>
+  </div>`;
+}
+
+/* ── Palette : ajouter / sélectionner / retirer un espace ── */
+function ajouterEspace(type) {
+  const meta = TYPE_META[type] || { label: type, ic: '✨' };
+  const same = projet.spaces.filter(s => s.type === type).length;
+  const name = same ? `${meta.label} ${same + 1}` : meta.label;
+  projet.spaces.push({ id: 's' + Date.now().toString(36), type, ic: meta.ic, name });
+  projet.paint.sel = projet.spaces.length - 1;
+  projet.paint.mode = null;
+  projet.suggested = null;
+  render();
+}
+function selectEspace(idx) {
+  projet.paint.mode = null;
+  projet.paint.sel = (projet.paint.sel === idx ? null : idx);
+  render();
+}
+function retirerEspace(idx) {
+  terrainDropSpace(idx);
+  projet.spaces.splice(idx, 1);
+  if (projet.paint.sel === idx) projet.paint.sel = null;
+  else if (projet.paint.sel > idx) projet.paint.sel--;
+  render();
+}
+function gomme() { projet.paint.mode = (projet.paint.mode === 'erase' ? null : 'erase'); projet.paint.sel = null; render(); }
+function toutEffacer() { projet.terrainGrid = new Array(TER_CELLS).fill(-1); projet.spaces = []; projet.paint = { sel: null, mode: null }; render(); }
+
+function render() { renderPlateau(); }   // alias : rerendre toute la fenêtre d'esquisse
+
 function plateauZoom(d) {
   const v = projet.vue;
   v.zoom = Math.round(Math.max(.6, Math.min(1.4, v.zoom + d * .15)) * 100) / 100;
   const gr = document.querySelector('.ter-grid.live'); if (gr) gr.style.setProperty('--zoom', v.zoom);
 }
-let ORB = null, ORB_GLOBAL = false;
+
+/* ── Peinture des blocs + orbite + zoom ── */
+let TER_PAINTING = false, TER_DIRTY = false, ORB = null, TER_GLOBAL = false;
+function terrainPaint(i) {
+  if (i < 0 || i >= TER_CELLS) return;
+  const p = projet.paint, g = terrainGrid();
+  if (p.sel == null && p.mode !== 'erase') return;
+  const v = p.sel != null ? p.sel : -1;
+  if (g[i] === v) return;
+  g[i] = v; TER_DIRTY = true;
+  const cell = document.querySelector(`.ter-grid.live .ter-cell[data-i="${i}"]`);
+  if (cell) {
+    const sp = v >= 0 ? projet.spaces[v] : null;
+    cell.classList.toggle('fill', !!sp);
+    cell.classList.toggle('flat', !!(sp && sp.type === 'jardin'));
+    if (sp) { cell.style.setProperty('--c', platColor(v)); cell.style.setProperty('--cd', platColor(v, 58)); cell.style.setProperty('--cd2', platColor(v, 48)); }
+    else { cell.style.removeProperty('--c'); cell.style.removeProperty('--cd'); cell.style.removeProperty('--cd2'); }
+    cell.textContent = '';
+  }
+}
+function terrainStrokeEnd() {
+  if (!TER_DIRTY) return;
+  TER_DIRTY = false;
+  render();
+  devaPeutReagir();
+}
 function bindPlateau(grid) {
   if (!grid) return;
   const wrap = grid.closest('.ter-wrap');
-  if (!ORB_GLOBAL) {
-    ORB_GLOBAL = true;
+  if (!TER_GLOBAL) {
+    TER_GLOBAL = true;
+    const end = () => { if (TER_PAINTING) { TER_PAINTING = false; terrainStrokeEnd(); } ORB = null; };
+    window.addEventListener('mouseup', end);
+    window.addEventListener('touchend', end);
+    window.addEventListener('touchcancel', end);
     const move = x => {
       if (ORB == null) return;
       projet.vue.rot = Math.round(Math.max(0, Math.min(48, ORB.base + (x - ORB.x) * 0.22)) * 10) / 10;
@@ -339,15 +444,18 @@ function bindPlateau(grid) {
     };
     window.addEventListener('mousemove', e => { if (ORB != null && (e.buttons & 1)) move(e.clientX); });
     window.addEventListener('touchmove', e => { if (ORB != null && e.touches[0]) move(e.touches[0].clientX); }, { passive: true });
-    window.addEventListener('mouseup', () => { ORB = null; });
-    window.addEventListener('touchend', () => { ORB = null; });
   }
   if (wrap) {
-    const start = (t, x) => { if (t.closest('.ter-zoom')) return false; ORB = { x, base: projet.vue.rot }; return true; };
+    const start = (t, x) => { if (t.closest('.ter-cell') || t.closest('.ter-zoom')) return false; ORB = { x, base: projet.vue.rot }; return true; };
     wrap.addEventListener('mousedown', e => { if (e.button === 0 && start(e.target, e.clientX)) e.preventDefault(); });
     wrap.addEventListener('touchstart', e => { const t = e.touches[0]; if (t) start(e.target, t.clientX); }, { passive: true });
-    wrap.addEventListener('dblclick', () => { projet.vue.rot = 24; projet.vue.zoom = 1; grid.style.setProperty('--rot', '24deg'); grid.style.setProperty('--zoom', '1'); });
+    wrap.addEventListener('dblclick', e => { if (e.target.closest('.ter-cell')) return; projet.vue.rot = 24; projet.vue.zoom = 1; grid.style.setProperty('--rot', '24deg'); grid.style.setProperty('--zoom', '1'); });
   }
+  const cellAt = t => { const c = (t && t.closest) ? t.closest('.ter-cell') : null; return c ? +c.dataset.i : -1; };
+  grid.addEventListener('mousedown', e => { if (e.button !== 0) return; const i = cellAt(e.target); if (i < 0) return; e.preventDefault(); TER_PAINTING = true; terrainPaint(i); });
+  grid.addEventListener('mousemove', e => { if (!TER_PAINTING || !(e.buttons & 1)) return; const i = cellAt(e.target); if (i >= 0) terrainPaint(i); });
+  grid.addEventListener('touchstart', e => { const i = cellAt(e.target); if (i < 0) return; e.preventDefault(); TER_PAINTING = true; terrainPaint(i); }, { passive: false });
+  grid.addEventListener('touchmove', e => { if (!TER_PAINTING) return; const t = e.touches[0]; if (!t) return; e.preventDefault(); const i = cellAt(document.elementFromPoint(t.clientX, t.clientY)); if (i >= 0) terrainPaint(i); }, { passive: false });
 }
 
 /* ── Go ─────────────────────────────────────────────────────── */
