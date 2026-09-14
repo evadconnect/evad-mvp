@@ -205,10 +205,11 @@ const PIPELINE = ['Solutions', 'Modélisation', 'Gestion', 'Vérification'];
 
 const DESTINATIONS = {
   creer: {
-    intro: 'Génial ! On va commencer par une <strong>esquisse</strong> de ton projet, puis chercher des solutions dans le Commun.',
+    intro: 'Génial ! On commence par une <strong>esquisse</strong> : tu dessines ton lieu en posant ses espaces sur le terrain.',
     active: 'Solutions',
     title: '🌱 Créer un projet ou un lieu',
-    body: 'Tu esquisses ton idée, Deva t\'aide à la préciser, puis on pioche dans les solutions partagées.'
+    body: 'Place tes espaces (jardin, cuisine, atelier…) sur la grille, comme une maquette, puis on cherchera des solutions dans le Commun.',
+    cta: { label: '🧱 Ouvrir l\'esquisse', href: 'esquisse.html' }
   },
   decouvrir: {
     intro: 'Parfait, explorons ensemble le <strong>Commun</strong> : la bibliothèque des solutions partagées.',
@@ -242,11 +243,15 @@ async function stepDestination(key) {
     const proof = s === 'Vérification';
     return `<span class="step${on ? ' on' : ''}${proof ? ' proof' : ''}">${s}</span>`;
   }).join('');
+  const cta = d.cta
+    ? `<a class="btn btn-primary" href="${d.cta.href}${d.cta.href.includes('?') ? '&' : '?'}prenom=${encodeURIComponent(state.prenom)}" style="text-decoration:none;justify-content:center">${d.cta.label}</a>`
+    : '';
   dest.innerHTML = `
     <h2>${d.title}</h2>
     <p>${d.body}</p>
     <div class="pipeline">${steps}</div>
-    <button class="btn btn-ghost" id="restart">↩ Recommencer le parcours</button>`;
+    ${cta}
+    <button class="btn btn-ghost" id="restart" style="margin-top:.6rem">↩ Recommencer le parcours</button>`;
   chat.appendChild(dest);
   scrollDown();
   dest.querySelector('#restart').addEventListener('click', restart);

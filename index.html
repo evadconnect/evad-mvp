@@ -3,173 +3,132 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>EVAD — Deva t'accueille</title>
+  <title>EVAD — Surface</title>
   <link rel="icon" href="img/evad-logo.png">
   <style>
+    /* ═══ Palette forêt & or ═══ */
     :root {
-      --ink:      #14251d;
-      --forest:   #14432e;   /* vert foncé (en-tête) */
-      --green:    #2f8f57;   /* vert moyen (étapes) */
-      --green-d:  #256f45;
-      --gold:     #f0b429;   /* jaune (question / preuve) */
-      --gold-d:   #c8931a;
-      --paper:    #ffffff;
-      --cream:    #eef4ef;   /* fond doux */
-      --line:     rgba(20,67,46,.14);
-      --shadow:   0 18px 40px -18px rgba(20,67,46,.45);
-      --r:        18px;
-      --r-lg:     26px;
+      --ink:    #14251d;
+      --forest: #14432e;
+      --moss:   #256f45;
+      --fern:   #2f8f57;
+      --gold:   #f0b429;
+      --cream:  #eef4ef;
+      --line:   rgba(20,67,46,.14);
+      --shadow: 0 18px 40px -18px rgba(20,67,46,.45);
+      --font:   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      /* teinte d'accent, pilotée par le mode courant */
+      --accent: var(--fern);
     }
+    /* le mode se lit à l'ambiance, jamais par un menu */
+    [data-mode="esquisse"] { --accent: #2f8f57; }
+    [data-mode="commun"]   { --accent: #c8732a; }
+    [data-mode="gestion"]  { --accent: #1f8f5f; }
+
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; }
+    html, body { margin: 0; padding: 0; height: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--cream);
-      color: var(--ink);
-      min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      font-family: var(--font); color: var(--ink);
+      background:
+        radial-gradient(120% 80% at 50% 0%, #f4f8f3 0%, var(--cream) 60%);
+      min-height: 100dvh; display: flex; flex-direction: column;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── En-tête ── */
-    header {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      gap: .6rem;
-      padding: .9rem 1.1rem;
-      background: var(--forest);
-      color: #fff;
-    }
-    header img { height: 30px; width: auto; display: block; }
-    header .brand { font-weight: 700; letter-spacing: .04em; font-size: 1.05rem; }
-    header .brand small { display: block; font-weight: 500; font-size: .62rem; opacity: .7; letter-spacing: .02em; }
+    /* ═══ En-tête discret ═══ */
+    .top { display: flex; align-items: center; gap: .55rem; padding: .7rem 1rem; }
+    .top img { height: 24px; }
+    .top .name { font-weight: 700; letter-spacing: .04em; color: var(--forest); font-size: .95rem; }
+    .top .mode-dot { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; font-size: .7rem; font-weight: 700; color: var(--moss); }
+    .top .mode-dot i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); display: inline-block; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 
-    /* ── Zone conversation ── */
-    main {
-      width: 100%;
-      max-width: 560px;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      padding: 1.1rem 1rem 1.4rem;
+    /* ═══ Scène centrale persistante : le plateau ═══ */
+    .scene {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: .5rem 1rem 1rem; min-height: 0;
     }
-    .chat { flex: 1; display: flex; flex-direction: column; gap: .85rem; }
+    .plateau-wrap {
+      width: 100%; max-width: 560px;
+    }
+    .plateau-cap { text-align: center; font-size: .72rem; color: var(--moss); opacity: .7; margin: 0 0 .5rem; }
 
-    /* bulles */
-    .row { display: flex; gap: .55rem; align-items: flex-end; animation: rise .32s ease both; }
-    .row.deva { align-self: flex-start; max-width: 88%; }
-    .row.me   { align-self: flex-end; flex-direction: row-reverse; max-width: 82%; }
-    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .ter-wrap { position: relative; background: linear-gradient(180deg,#cfe6f4 0%,#e7f5ec 62%);
+      border: 1px solid var(--line); border-radius: 26px; padding: 1.6rem .8rem 1.7rem;
+      box-shadow: var(--shadow); perspective: 820px; perspective-origin: 50% 34%; overflow: hidden; }
+    /* liseré d'accent, très discret : l'ambiance du mode */
+    .ter-wrap::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+      background: var(--accent); opacity: .5; }
+    .ter-grid { --rot: 24deg; --zoom: 1; position: relative; display: grid;
+      grid-template-columns: repeat(12,minmax(0,1fr)); gap: 2px; max-width: 352px; margin: 0 auto;
+      transform: rotateX(54deg) rotateZ(var(--rot)) scale(var(--zoom)); transform-style: preserve-3d;
+      transform-origin: 50% 62%; touch-action: none; user-select: none; -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent; }
+    .ter-grid::before { content: ''; position: absolute; inset: -8px; transform: translateZ(-14px);
+      border-radius: 12px; background: linear-gradient(180deg,#b9d5ab,#9dbf90);
+      box-shadow: 0 28px 36px -14px rgba(13,43,34,.5); }
+    .ter-grid::after { content: ''; position: absolute; left: -8px; right: -8px; top: calc(100% + 8px);
+      height: 16px; transform-origin: top; transform: rotateX(-90deg); border-radius: 0 0 12px 12px;
+      background: linear-gradient(180deg,#8fae7e 0 3px,#a5814f 3px 55%,#7c5f38 55% 82%,#69543a 82%); }
+    .ter-cell { position: relative; aspect-ratio: 1; border-radius: 2px; --h: 0px; --c: #bfd6b2;
+      background: var(--c); transform: translateZ(var(--h)); transform-style: preserve-3d;
+      box-shadow: inset 0 0 0 1px rgba(13,43,34,.05); transition: transform .14s, box-shadow .12s; }
+    .ter-cell.alt { --c: #b5cea7; }
+    .ter-cell.r1 { --h: 1.5px; }
+    .ter-grid.live .ter-cell:hover { transform: translateZ(5px); box-shadow: inset 0 0 0 1px rgba(13,43,34,.28); }
+    /* ambiance : papillon + crépuscule qui respire */
+    .tc-ic { display: inline-block; transform: rotateZ(calc(-1*var(--rot,0deg))) rotateX(-54deg) scale(1.25);
+      transform-origin: 50% 90%; pointer-events: none; filter: drop-shadow(0 2px 1.5px rgba(0,0,0,.3)); }
+    .ter-fly { position: absolute; font-size: 12px; pointer-events: none; z-index: 3; animation: terFlyA 26s linear infinite; }
+    @keyframes terFlyA { 0% { left: -4%; top: 64%; } 22% { left: 24%; top: 36%; } 48% { left: 54%; top: 58%; } 74% { left: 78%; top: 32%; } 100% { left: 104%; top: 50%; } }
+    .ter-dusk { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; z-index: 2;
+      background: linear-gradient(180deg,rgba(52,62,118,.6),rgba(255,140,60,.35)); mix-blend-mode: multiply;
+      opacity: 0; animation: terDusk 150s linear infinite; }
+    @keyframes terDusk { 0%,58% { opacity: 0; } 68%,82% { opacity: .3; } 92%,100% { opacity: 0; } }
+    .ter-zoom { position: absolute; right: .55rem; top: .55rem; display: flex; gap: .3rem; z-index: 5; }
+    .ter-zoom button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line);
+      background: #fff; color: var(--moss); font-weight: 800; cursor: pointer; font-family: var(--font); font-size: 1rem; }
+    .ter-zoom button:hover { border-color: var(--fern); }
 
-    .avatar {
-      flex: none; width: 40px; height: 40px; border-radius: 50%;
-      object-fit: cover; background: var(--green); border: 2px solid #fff;
-      box-shadow: 0 4px 10px -4px rgba(20,67,46,.5);
+    /* ═══ Deva, compagnon de bordure basse : le fil ═══ */
+    .deva-bar {
+      border-top: 2px solid var(--accent);
+      background: #fff; box-shadow: 0 -12px 30px -20px rgba(20,67,46,.4);
+      padding: .7rem 1rem calc(.7rem + env(safe-area-inset-bottom));
+      display: flex; align-items: center; gap: .7rem;
     }
-    .bubble {
-      padding: .8rem 1rem; border-radius: var(--r); font-size: 1.02rem; line-height: 1.45;
-    }
-    .deva .bubble { background: var(--paper); border: 1px solid var(--line); border-bottom-left-radius: 6px; box-shadow: 0 6px 18px -12px rgba(20,67,46,.4); }
-    .me   .bubble { background: var(--green); color: #fff; border-bottom-right-radius: 6px; }
-    .bubble strong { color: var(--green-d); }
-    .me .bubble strong { color: #fff; }
-
-    /* indicateur "Deva écrit…" */
-    .typing { display: inline-flex; gap: 5px; padding: .2rem 0; }
-    .typing span { width: 8px; height: 8px; border-radius: 50%; background: var(--green); opacity: .5; animation: blink 1.2s infinite; }
-    .typing span:nth-child(2) { animation-delay: .2s; }
-    .typing span:nth-child(3) { animation-delay: .4s; }
-    @keyframes blink { 0%,60%,100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
-
-    /* ── Zone d'actions (boutons / saisie) ── */
-    .actions {
-      margin-top: 1.1rem;
-      display: flex;
-      flex-direction: column;
-      gap: .6rem;
-      animation: rise .3s ease both;
-    }
-    .actions.hidden { display: none; }
-
-    .btn {
-      font-family: inherit; font-size: 1.02rem; font-weight: 650;
-      padding: .95rem 1.1rem; border-radius: var(--r);
-      border: 2px solid transparent; cursor: pointer; text-align: left;
-      display: flex; align-items: center; gap: .7rem; width: 100%;
-      transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
-    }
-    .btn:active { transform: scale(.98); }
-    .btn .ico { font-size: 1.3rem; flex: none; }
-    .btn .sub { display: block; font-weight: 500; font-size: .78rem; opacity: .72; margin-top: .1rem; }
-
-    .btn-primary { background: var(--green); color: #fff; box-shadow: 0 10px 22px -12px rgba(47,143,87,.9); }
-    .btn-primary:hover { background: var(--green-d); }
-    .btn-gold { background: var(--gold); color: var(--ink); box-shadow: 0 10px 22px -12px rgba(240,180,41,.9); }
-    .btn-gold:hover { background: var(--gold-d); }
-    .btn-ghost { background: var(--paper); color: var(--forest); border-color: var(--line); }
-    .btn-ghost:hover { border-color: var(--green); }
-
-    /* saisie prénom */
-    .field { display: flex; gap: .5rem; }
-    .field input {
-      flex: 1; font-family: inherit; font-size: 1.05rem; padding: .9rem 1rem;
-      border: 2px solid var(--line); border-radius: var(--r); background: #fff; color: var(--ink);
-    }
-    .field input:focus { outline: none; border-color: var(--green); }
-    .field .send {
-      flex: none; border: none; background: var(--green); color: #fff; border-radius: var(--r);
-      width: 54px; font-size: 1.3rem; cursor: pointer;
-    }
-    .field .send:hover { background: var(--green-d); }
-
-    /* carte vidéo Vision */
-    .video-card {
-      background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-lg);
-      overflow: hidden; box-shadow: var(--shadow); animation: rise .32s ease both;
-    }
-    .video-frame {
-      aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--forest), var(--green));
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      color: #fff; gap: .5rem; text-align: center; padding: 1rem;
-    }
-    .video-frame .play { width: 62px; height: 62px; border-radius: 50%; background: rgba(255,255,255,.16); border: 2px solid rgba(255,255,255,.6); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
-    .video-frame small { opacity: .8; font-size: .74rem; max-width: 80%; }
-    .video-card .cap { padding: .75rem 1rem; font-size: .82rem; color: var(--ink); opacity: .75; }
-
-    /* écran destination (stub) */
-    .dest {
-      background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-lg);
-      padding: 1.3rem; box-shadow: var(--shadow); animation: rise .32s ease both;
-    }
-    .dest h2 { margin: 0 0 .4rem; font-size: 1.25rem; color: var(--forest); }
-    .dest p { margin: 0 0 1rem; line-height: 1.5; }
-    .pipeline { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1.1rem; }
-    .pipeline .step {
-      font-size: .74rem; font-weight: 650; padding: .4rem .7rem; border-radius: 100px;
-      background: var(--cream); color: var(--green-d); border: 1px solid var(--line);
-    }
-    .pipeline .step.on { background: var(--green); color: #fff; border-color: var(--green); }
-    .pipeline .step.proof { }
-    .pipeline .step.proof.on { background: var(--gold); color: var(--ink); border-color: var(--gold); }
-
-    .muted { text-align: center; font-size: .74rem; color: var(--ink); opacity: .5; padding-top: 1rem; }
+    .deva-av { flex: none; width: 42px; height: 42px; border-radius: 50%; object-fit: cover;
+      background: var(--fern); border: 2px solid #fff; box-shadow: 0 4px 10px -4px rgba(20,67,46,.5); }
+    .deva-thread { flex: 1; min-width: 0; }
+    .deva-who { font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--moss); }
+    .deva-line { font-size: .95rem; line-height: 1.4; color: var(--ink); margin-top: .1rem; }
+    .deva-line .skel { display: inline-block; height: .8em; width: 62%; border-radius: 6px;
+      background: linear-gradient(90deg, var(--cream), #dfe9e1, var(--cream)); background-size: 200% 100%;
+      animation: sk 1.6s linear infinite; vertical-align: middle; }
+    @keyframes sk { to { background-position: -200% 0; } }
   </style>
 </head>
-<body>
-  <header>
+<body data-mode="esquisse">
+  <div class="top">
     <img src="img/evad-logo.png" alt="EVAD">
-    <span class="brand">EVAD<small>Écosystème Vivant d'Action et de Développement</small></span>
-  </header>
+    <span class="name">EVAD</span>
+    <span class="mode-dot"><i></i><span id="mode-label">Esquisse</span></span>
+  </div>
 
-  <main>
-    <div class="chat" id="chat" aria-live="polite"></div>
-    <div class="actions hidden" id="actions"></div>
-    <p class="muted" id="footnote"></p>
-  </main>
+  <div class="scene">
+    <div class="plateau-wrap">
+      <p class="plateau-cap">Le plateau de ton projet</p>
+      <div id="plateau"></div>
+    </div>
+  </div>
 
-  <script src="js/deva-onboarding.js"></script>
+  <div class="deva-bar">
+    <img class="deva-av" src="img/deva.png" alt="Deva">
+    <div class="deva-thread">
+      <div class="deva-who">Deva</div>
+      <div class="deva-line" id="deva-line"><span class="skel"></span></div>
+    </div>
+  </div>
+
+  <script src="js/surface.js"></script>
 </body>
 </html>
