@@ -18,7 +18,8 @@ const projet = {
   vue: { rot: 24, zoom: 1 },
   spaces: [],        // { id, type, ic, name }
   terrainGrid: null, // Array(120) : index de case -> index d'espace, ou -1
-  paint: { sel: null, mode: null },  // sel = espace en cours de peinture ; mode = 'erase' | null
+  deco: [],          // { t, i } : décor posé (arbre, chemin, mare...) sur une case d'herbe
+  paint: { sel: null, mode: null },  // sel = espace peint ; mode = 'erase' | clé de décor | null
   suggested: null,   // type d'espace que Deva pointe (pull)
 };
 
@@ -215,6 +216,15 @@ const SPACE_TYPES = [
   ['stockage', 'Stockage', '📦'], ['autre', 'Autre', '✨'],
 ];
 const TYPE_META = Object.fromEntries(SPACE_TYPES.map(([t, l, i]) => [t, { label: l, ic: i }]));
+// Décor posable sur l'herbe (repris du jeu). flat = décor à plat (chemin, mare).
+const MODEL_DECO = {
+  arbre:    { ic: '🌳',  n: 'Arbre' },
+  fleur:    { ic: '🌼',  n: 'Fleurs' },
+  rocher:   { ic: '🪨',  n: 'Rocher' },
+  chemin:   { ic: '🛤️', n: 'Chemin', flat: true },
+  eau:      { ic: '💧',  n: 'Mare',   flat: true },
+  eolienne: { ic: '🌬️', n: 'Éolienne' },
+};
 // Couleur réaliste par type : [teinte, saturation, décalage de luminosité] (repris du jeu)
 const TYPE_COLORS = {
   jardin: [115, 45, 0], serre: [200, 12, 0], compost: [26, 35, -8],
@@ -321,16 +331,26 @@ function terWrapHTML() {
   const hash = i => { let x = (i + 7) * 2654435761; x ^= x >>> 13; return (x * 2246822519) >>> 0; };
   const first = new Map();
   for (let i = 0; i < TER_CELLS; i++) { const v = g[i]; if (v >= 0 && !first.has(v)) first.set(v, i); }
+  const deco = new Map(projet.deco.map(d => [d.i, d.t]));
   let cells = '';
   for (let i = 0; i < TER_CELLS; i++) {
-    const v = g[i], sp = v >= 0 ? projet.spaces[v] : null;
+    const v = g[i], sp = v >= 0 ? projet.spaces[v] : null, d = deco.get(i);
     let cls = 'ter-cell' + ((((i % TER_COLS) + ((i / TER_COLS) | 0)) % 2) ? ' alt' : '');
     let inner = '', style = '';
     if (sp) {
       cls += ' fill' + (sp.type === 'jardin' ? ' flat' : '');
       style = ` style="--c:${platColor(v)};--cd:${platColor(v, 58)};--cd2:${platColor(v, 48)}"`;
       if (first.get(v) === i) inner = `<span class="tc-ic">${sp.ic}</span><span class="ter-label">${escapeHtml(sp.name)}</span>`;
-    } else if (hash(i) % 7 === 0) cls += ' r1';
+    } else if (d === 'chemin') {
+      cls += ' deco-chemin';
+      if (i >= TER_COLS && deco.get(i - TER_COLS) === 'chemin') cls += ' chem-n';
+      if (i + TER_COLS < TER_CELLS && deco.get(i + TER_COLS) === 'chemin') cls += ' chem-s';
+      if (i % TER_COLS > 0 && deco.get(i - 1) === 'chemin') cls += ' chem-w';
+      if (i % TER_COLS < TER_COLS - 1 && deco.get(i + 1) === 'chemin') cls += ' chem-e';
+    } else if (d === 'eau') cls += ' deco-eau';
+    else if (d === 'eolienne') inner = '<span class="tc-ic tc-eol"><b></b></span>';
+    else if (d && MODEL_DECO[d]) inner = `<span class="tc-ic">${MODEL_DECO[d].ic}</span>`;
+    else if (hash(i) % 7 === 0) cls += ' r1';
     cells += `<div class="${cls}" data-i="${i}"${style}>${inner}</div>`;
   }
   return `<div class="ter-wrap">
@@ -354,16 +374,22 @@ function legendHTML() {
 }
 
 function paletteHTML() {
+  const m = projet.paint.mode;
   const sel = projet.paint.sel != null ? projet.spaces[projet.paint.sel] : null;
-  const hint = projet.paint.mode === 'erase' ? '🧽 Efface des blocs en cliquant sur le plateau'
+  const hint = m === 'erase' ? '🧽 Efface en cliquant sur le plateau'
+    : (m && MODEL_DECO[m]) ? `Pose ${MODEL_DECO[m].ic} <b>${MODEL_DECO[m].n}</b> sur l'herbe (clic à l'unité)`
     : sel ? `Pose des blocs de <b>${escapeHtml(sel.name)}</b> sur le plateau`
     : 'Choisis un espace, puis pose des blocs sur le plateau';
   return `<div class="palette">
     <div class="pal-hint">${hint}</div>
+    <div class="pal-sect">🏡 Espaces</div>
     <div class="pal-chips">${SPACE_TYPES.map(([t, l, ic]) =>
       `<button class="pal-chip${projet.suggested === t ? ' suggested' : ''}" onclick="ajouterEspace('${t}')" title="Ajouter ${l}"><span class="pc-ic">${ic}</span>${l}</button>`).join('')}</div>
+    <div class="pal-sect">🌿 Décor</div>
+    <div class="deco-grid">${Object.entries(MODEL_DECO).map(([k, d]) =>
+      `<button class="deco-card${m === k ? ' on' : ''}" onclick="selectDeco('${k}')" title="${d.n}"><span class="dc-ic">${d.ic}</span><span class="dc-nm">${d.n}</span></button>`).join('')}</div>
     <div class="pal-tools">
-      <button class="${projet.paint.mode === 'erase' ? 'on' : ''}" onclick="gomme()">🧽 Gomme</button>
+      <button class="${m === 'erase' ? 'on' : ''}" onclick="gomme()">🧽 Gomme</button>
       <button onclick="toutEffacer()">🗑️ Tout effacer</button>
     </div>
   </div>`;
@@ -393,7 +419,25 @@ function retirerEspace(idx) {
   render();
 }
 function gomme() { projet.paint.mode = (projet.paint.mode === 'erase' ? null : 'erase'); projet.paint.sel = null; render(); }
-function toutEffacer() { projet.terrainGrid = new Array(TER_CELLS).fill(-1); projet.spaces = []; projet.paint = { sel: null, mode: null }; render(); }
+function selectDeco(k) { projet.paint.mode = (projet.paint.mode === k ? null : k); projet.paint.sel = null; projet.suggested = null; render(); }
+function toutEffacer() { projet.terrainGrid = new Array(TER_CELLS).fill(-1); projet.spaces = []; projet.deco = []; projet.paint = { sel: null, mode: null }; render(); }
+
+// Le décor se pose à l'unité, sur l'herbe uniquement
+function terrainDecoClick(i) {
+  const m = projet.paint.mode;
+  if (!m || m === 'erase' || !MODEL_DECO[m]) return false;
+  if (terrainGrid()[i] >= 0) { toast('Le décor se pose sur l\'herbe, pas sur un espace'); return true; }
+  if (projet.deco.find(d => d.i === i)) { toast('Il y a déjà quelque chose ici'); return true; }
+  projet.deco.push({ t: m, i }); render(); return true;
+}
+
+let TOAST_T = null;
+function toast(msg) {
+  let t = document.getElementById('esq-toast');
+  if (!t) { t = document.createElement('div'); t.id = 'esq-toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(TOAST_T); TOAST_T = setTimeout(() => t.classList.remove('show'), 2000);
+}
 
 function render() { renderPlateau(); }   // alias : rerendre toute la fenêtre d'esquisse
 
@@ -410,6 +454,7 @@ function terrainPaint(i) {
   const p = projet.paint, g = terrainGrid();
   if (p.sel == null && p.mode !== 'erase') return;
   const v = p.sel != null ? p.sel : -1;
+  if (v === -1) { const di = projet.deco.findIndex(d => d.i === i); if (di >= 0) { projet.deco.splice(di, 1); TER_DIRTY = true; } }
   if (g[i] === v) return;
   g[i] = v; TER_DIRTY = true;
   const cell = document.querySelector(`.ter-grid.live .ter-cell[data-i="${i}"]`);
@@ -452,9 +497,9 @@ function bindPlateau(grid) {
     wrap.addEventListener('dblclick', e => { if (e.target.closest('.ter-cell')) return; projet.vue.rot = 24; projet.vue.zoom = 1; grid.style.setProperty('--rot', '24deg'); grid.style.setProperty('--zoom', '1'); });
   }
   const cellAt = t => { const c = (t && t.closest) ? t.closest('.ter-cell') : null; return c ? +c.dataset.i : -1; };
-  grid.addEventListener('mousedown', e => { if (e.button !== 0) return; const i = cellAt(e.target); if (i < 0) return; e.preventDefault(); TER_PAINTING = true; terrainPaint(i); });
+  grid.addEventListener('mousedown', e => { if (e.button !== 0) return; const i = cellAt(e.target); if (i < 0) return; e.preventDefault(); if (terrainDecoClick(i)) return; TER_PAINTING = true; terrainPaint(i); });
   grid.addEventListener('mousemove', e => { if (!TER_PAINTING || !(e.buttons & 1)) return; const i = cellAt(e.target); if (i >= 0) terrainPaint(i); });
-  grid.addEventListener('touchstart', e => { const i = cellAt(e.target); if (i < 0) return; e.preventDefault(); TER_PAINTING = true; terrainPaint(i); }, { passive: false });
+  grid.addEventListener('touchstart', e => { const i = cellAt(e.target); if (i < 0) return; e.preventDefault(); if (terrainDecoClick(i)) return; TER_PAINTING = true; terrainPaint(i); }, { passive: false });
   grid.addEventListener('touchmove', e => { if (!TER_PAINTING) return; const t = e.touches[0]; if (!t) return; e.preventDefault(); const i = cellAt(document.elementFromPoint(t.clientX, t.clientY)); if (i >= 0) terrainPaint(i); }, { passive: false });
 }
 
