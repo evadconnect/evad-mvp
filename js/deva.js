@@ -21,6 +21,7 @@ const projet = {
   deco: [],          // { t, i } : décor posé (arbre, chemin, mare...) sur une case d'herbe
   paint: { sel: null, mode: null },  // sel = espace peint ; mode = 'erase' | clé de décor | null
   suggested: null,   // type d'espace que Deva pointe (pull)
+  commun: { open: false, espaceIdx: null },  // fenêtre du Commun ouverte sous l'esquisse
 };
 
 const thread   = document.getElementById('thread');
@@ -321,17 +322,17 @@ async function stepCommunEspace() {
 async function ouvrirCommun(idx) {
   const sp = projet.spaces[idx];
   bubble('me', `Solutions pour ${sp.name}`);
-  document.body.dataset.mode = 'commun';
-  document.getElementById('mode-label').textContent = 'Le Commun';
   const matches = COMMUN.filter(s => s.types.includes(sp.type));
   if (!matches.length) {
     await devaSay(`Je n'ai rien dans le Commun pour « ${escapeHtml(sp.name)} » pour l'instant. Je ne t'invente pas de solution.`, 800);
-    revenirEsquisse();
     offrirCommun();
     return;
   }
-  await devaSay(`Voici ce que le Commun propose pour <strong>${escapeHtml(sp.name)}</strong>. Chaque carte vient d'une fiche source. Tu choisis, je ne décide rien.`, 850);
-  matches.slice(0, 3).forEach(sol => glisserCarteSolution(sol, idx));
+  document.body.dataset.mode = 'commun';
+  document.getElementById('mode-label').textContent = 'Le Commun';
+  projet.commun = { open: true, espaceIdx: idx };
+  renderPlateau();   // la bibliothèque s'ouvre en fenêtre sous l'esquisse
+  await devaSay(`Le Commun s'ouvre sous ta maquette. Regarde les fiches proposées pour <strong>${escapeHtml(sp.name)}</strong> et rattache celle que tu veux. Je ne décide rien.`, 850);
   clearComposer();
 }
 
@@ -339,24 +340,37 @@ function revenirEsquisse() {
   document.body.dataset.mode = 'esquisse';
   document.getElementById('mode-label').textContent = 'Esquisse';
 }
+function fermerCommun() {
+  projet.commun = { open: false, espaceIdx: null };
+  revenirEsquisse();
+  renderPlateau();
+  offrirCommun();
+}
 
-// Deva fait glisser une carte de solution dans le fil
-function glisserCarteSolution(sol, idx) {
+// La fenêtre du Commun, rendue SOUS l'esquisse (panneau de droite)
+function communDrawerHTML() {
+  if (!projet.commun.open) return '';
+  const idx = projet.commun.espaceIdx, sp = projet.spaces[idx];
+  if (!sp) return '';
+  const matches = COMMUN.filter(s => s.types.includes(sp.type)).slice(0, 6);
+  return `<div class="commun-drawer">
+    <div class="cd-head"><span class="cd-ic">🏷️</span>
+      <div class="cd-tx"><div class="cd-title">Le Commun</div><div class="cd-sub">solutions pour ${sp.ic} ${escapeHtml(sp.name)}</div></div>
+      <button class="cd-close" onclick="fermerCommun()" title="Fermer">✕</button></div>
+    <div class="cd-cards">${matches.map(sol => solCardHTML(sol, idx)).join('')}</div>
+  </div>`;
+}
+function solCardHTML(sol, idx) {
   const sp = projet.spaces[idx];
-  const row = document.createElement('div');
-  row.className = 'row deva';
-  row.style.maxWidth = '96%';
-  row.innerHTML = `<img class="avatar" src="${AVATAR}" alt="Deva">
-    <div class="sol-card">
-      <div class="sol-head"><span class="sol-ic">${sol.ic}</span>
-        <div class="sol-tx"><div class="sol-titre">${escapeHtml(sol.titre)}</div>
-        <div class="sol-src" title="Source de la fiche">🏷️ ${escapeHtml(sol.source)} · <em>fiche provisoire</em></div></div></div>
-      <button class="sol-more" onclick="toggleSol(this)">Voir la fiche ▾</button>
-      <div class="sol-desc" hidden>${escapeHtml(sol.desc)}</div>
-      <button class="sol-attach" onclick="rattacher('${sol.id}',${idx})">🔗 Rattacher à ${escapeHtml(sp.name)}</button>
-    </div>`;
-  thread.appendChild(row);
-  scrollDown();
+  const attached = sp.solution && sp.solution.id === sol.id;
+  return `<div class="sol-card${attached ? ' attached' : ''}">
+    <div class="sol-head"><span class="sol-ic">${sol.ic}</span>
+      <div class="sol-tx"><div class="sol-titre">${escapeHtml(sol.titre)}</div>
+      <div class="sol-src" title="Source de la fiche">🏷️ ${escapeHtml(sol.source)} · <em>fiche provisoire</em></div></div></div>
+    <button class="sol-more" onclick="toggleSol(this)">Voir la fiche ▾</button>
+    <div class="sol-desc" hidden>${escapeHtml(sol.desc)}</div>
+    <button class="sol-attach" onclick="rattacher('${sol.id}',${idx})">${attached ? '✅ Rattaché' : '🔗 Rattacher à ' + escapeHtml(sp.name)}</button>
+  </div>`;
 }
 function toggleSol(btn) {
   const d = btn.nextElementSibling;
@@ -369,8 +383,9 @@ async function rattacher(solId, idx) {
   if (!sol || !sp) return;
   sp.solution = { id: sol.id, ic: sol.ic, titre: sol.titre, source: sol.source };
   bubble('me', `Rattacher « ${sol.titre} » à ${sp.name}`);
-  renderPlateau();
+  projet.commun = { open: false, espaceIdx: null };
   revenirEsquisse();
+  renderPlateau();
   await devaSequence([
     [`C'est relié : <strong>${escapeHtml(sol.titre)}</strong> est rattaché à ${escapeHtml(sp.name)}, avec sa source.`, 750],
     'À la prochaine étape, tu valideras une action réelle et cet espace passera au vert.'
@@ -422,8 +437,9 @@ function platColor(idx, l) {
 /* ── Rendu : plateau + légende + palette ── */
 function renderPlateau() {
   const el = document.getElementById('tool-body'); if (!el) return;
-  el.innerHTML = `<div class="plateau-wrap">${terWrapHTML()}${legendHTML()}${paletteHTML()}</div>`;
+  el.innerHTML = `<div class="plateau-wrap">${terWrapHTML()}${legendHTML()}${paletteHTML()}${communDrawerHTML()}</div>`;
   bindPlateau(el.querySelector('.ter-grid'));
+  if (projet.commun.open) { const d = el.querySelector('.commun-drawer'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
 }
 
 function terWrapHTML() {
