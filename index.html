@@ -169,8 +169,10 @@
 
     /* ─── Légende des espaces (cliquable) ─── */
     .ter-legend { margin-top: .9rem; display: flex; flex-direction: column; gap: .3rem; }
-    .ter-leg { display: flex; align-items: center; gap: .45rem; width: 100%; border: 1.5px solid var(--line); background: #fff;
+    .ter-leg { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; width: 100%; border: 1.5px solid var(--line); background: #fff;
       border-radius: 10px; padding: .4rem .55rem; cursor: pointer; font-family: var(--font); font-size: .74rem; color: var(--ink); transition: border-color .12s, background .12s; }
+    .ter-leg .tl-sol { flex-basis: 100%; font-size: .68rem; color: #a06c00; font-weight: 650; border-top: 1px dashed rgba(200,115,42,.3); padding-top: .3rem; margin-top: .1rem; }
+    .ter-leg .tl-sol em { font-weight: 500; opacity: .8; }
     .ter-leg:hover { border-color: var(--fern); }
     .ter-leg.on { border-color: var(--forest); background: color-mix(in srgb, var(--fern) 12%, #fff); }
     .ter-leg .tl-sw { width: 13px; height: 13px; border-radius: 3px; flex: none; box-shadow: inset 0 0 0 1px rgba(20,67,46,.2); }
@@ -206,6 +208,20 @@
     .pal-tools button { flex: 1; border: 1.5px solid var(--line); background: #fff; color: var(--moss); border-radius: 10px; padding: .5rem; font-family: var(--font); font-size: .74rem; font-weight: 700; cursor: pointer; }
     .pal-tools button:hover { border-color: var(--fern); }
     .pal-tools button.on { border-color: var(--gold); background: #fff7e6; color: #a06c00; }
+
+    /* ─── Carte de solution du Commun (glissée dans le fil) ─── */
+    .sol-card { flex: 1; min-width: 0; background: var(--paper); border: 1px solid rgba(200,115,42,.35);
+      border-left: 4px solid var(--accent); border-radius: 16px; padding: .8rem .9rem; box-shadow: 0 6px 18px -13px rgba(20,67,46,.4); }
+    .sol-head { display: flex; align-items: flex-start; gap: .55rem; }
+    .sol-head .sol-ic { font-size: 1.45rem; line-height: 1; flex: none; }
+    .sol-titre { font-weight: 800; color: var(--forest); font-size: .98rem; }
+    .sol-src { font-size: .7rem; color: #a06c00; margin-top: .12rem; }
+    .sol-src em { font-style: italic; opacity: .85; }
+    .sol-more { margin-top: .55rem; border: none; background: none; color: var(--moss); font-family: var(--font); font-size: .74rem; font-weight: 700; cursor: pointer; padding: 0; text-decoration: underline; }
+    .sol-desc { margin-top: .45rem; font-size: .82rem; line-height: 1.45; color: var(--ink); background: var(--cream); border-radius: 10px; padding: .5rem .6rem; }
+    .sol-attach { margin-top: .65rem; width: 100%; border: none; background: var(--gold); color: #3a2a00; font-family: var(--font);
+      font-size: .84rem; font-weight: 800; border-radius: 12px; padding: .6rem; cursor: pointer; transition: filter .12s; }
+    .sol-attach:hover { filter: brightness(.96); }
 
     /* petit message transitoire */
     #esq-toast { position: fixed; left: 50%; bottom: 1.4rem; transform: translate(-50%,16px); background: var(--forest); color: #fff;

@@ -268,14 +268,114 @@ async function stepInviteEspaces() {
 }
 
 // Deva réagit une fois, doucement, quand les premiers blocs sont posés (pull, pas push)
-function devaPeutReagir() {
+async function devaPeutReagir() {
   if (devaAReagi) return;
   if (terrainUsed() > 0) {
     devaAReagi = true;
     const sp = projet.spaces[projet.paint.sel] || projet.spaces.find((_, i) => terrainCount(i) > 0);
     const nm = sp ? sp.name.toLowerCase() : 'ton espace';
-    devaSay(`Voilà, ${nm} prend sa place. Ajoute d'autres espaces quand tu veux, tu personnalises leur taille bloc par bloc.`, 500);
+    await devaSay(`Voilà, ${nm} prend sa place. Continue ta maquette, puis quand tu veux je regarde le Commun.`, 500);
+    offrirCommun();   // marque discrète : Deva propose, elle n'impose pas (pull)
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Étape 4 — Le Commun : Deva fait glisser dans le fil des cartes de
+   solutions (source toujours visible, badge de fiche provisoire).
+   L'humain rattache une solution à un espace. Deva ne propose QUE des
+   fiches du Commun ; si rien ne correspond, elle le dit, sans inventer.
+   ═══════════════════════════════════════════════════════════════ */
+
+// Le Commun : une dizaine de fiches EN DUR, marquées provisoires.
+const COMMUN = [
+  { id: 'compost', ic: '♻️', titre: 'Compost partagé', source: 'Réseau Compost Citoyen', types: ['jardin', 'compost', 'cuisine', 'cantine'], desc: 'Un composteur collectif pour transformer les biodéchets en terreau, animé par les habitants.' },
+  { id: 'potager', ic: '🌱', titre: 'Potager en permaculture', source: 'Réseau Permaculture', types: ['jardin', 'serre'], desc: 'Des buttes nourricières sans pesticide, en associant les cultures pour un sol vivant.' },
+  { id: 'eaupluie', ic: '💧', titre: "Récupération d'eau de pluie", source: 'Guide ADEME', types: ['jardin', 'serre', 'autre'], desc: 'Des cuves reliées aux toitures pour arroser sans puiser dans le réseau.' },
+  { id: 'repaircafe', ic: '🔧', titre: 'Repair Café', source: 'Réseau des Repair Cafés', types: ['atelier', 'cafe_bar', 'fablab'], desc: "Un rendez-vous où l'on répare ensemble objets et vélos plutôt que de jeter." },
+  { id: 'amap', ic: '🥕', titre: 'AMAP, panier paysan', source: 'Réseau des AMAP', types: ['cuisine', 'cantine', 'boutique', 'cafe_bar'], desc: 'Un partenariat direct avec des paysans locaux, en paniers hebdomadaires.' },
+  { id: 'frigo', ic: '🧊', titre: 'Frigo solidaire', source: 'Les Frigos Solidaires', types: ['cuisine', 'cafe_bar', 'cantine'], desc: 'Un frigo en libre accès pour partager les surplus et lutter contre le gaspillage.' },
+  { id: 'fresque', ic: '🌍', titre: 'Fresque du Climat', source: 'Association Fresque du Climat', types: ['formation', 'salle_reunion', 'coworking'], desc: 'Un atelier collaboratif de 3h pour comprendre le changement climatique.' },
+  { id: 'gratiferia', ic: '🎁', titre: 'Boîte à dons', source: 'Mouvement Gratiferia', types: ['boutique', 'expo', 'autre'], desc: 'Un espace où déposer et prendre gratuitement, pour donner une seconde vie aux objets.' },
+  { id: 'solaire', ic: '☀️', titre: 'Autoconsommation solaire', source: 'Guide ADEME', types: ['coworking', 'stockage', 'autre', 'fablab'], desc: 'Des panneaux photovoltaïques pour couvrir une partie des besoins en électricité.' },
+  { id: 'toilettes', ic: '🚻', titre: 'Toilettes sèches', source: 'Réseau Assainissement Écologique', types: ['jardin', 'autre', 'scene'], desc: 'Des toilettes sans eau dont le compost enrichit les sols.' },
+  { id: 'vrac', ic: '🫙', titre: 'Épicerie en vrac', source: 'Réseau Vrac', types: ['boutique', 'cuisine'], desc: 'Vente sans emballage, avec des contenants réutilisables apportés par les habitants.' },
+  { id: 'velo', ic: '🚲', titre: 'Atelier vélo participatif', source: "L'Heureux Cyclage", types: ['atelier', 'fablab', 'sport'], desc: "Un local outillé pour apprendre à entretenir et réparer son vélo." },
+];
+
+// Marque discrète dans le fil : Deva propose d'ouvrir le Commun
+function offrirCommun() {
+  showChips(box => box.appendChild(chip('btn-ghost', '🔎', 'Des solutions du Commun ?', 'Pour un de tes espaces', stepCommunEspace)));
+}
+
+async function stepCommunEspace() {
+  const poses = projet.spaces.filter((_, i) => terrainCount(i) > 0);
+  if (!poses.length) { await devaSay('Pose d\'abord un espace sur la maquette, puis je chercherai des solutions.', 600); offrirCommun(); return; }
+  await devaSay('Pour quel espace veux-tu des solutions du Commun ?', 650);
+  showChips(box => {
+    projet.spaces.forEach((sp, idx) => {
+      if (terrainCount(idx) > 0) box.appendChild(chip('btn-primary', sp.ic, sp.name, sp.solution ? '🔗 déjà une solution' : '', () => ouvrirCommun(idx)));
+    });
+  });
+}
+
+async function ouvrirCommun(idx) {
+  const sp = projet.spaces[idx];
+  bubble('me', `Solutions pour ${sp.name}`);
+  document.body.dataset.mode = 'commun';
+  document.getElementById('mode-label').textContent = 'Le Commun';
+  const matches = COMMUN.filter(s => s.types.includes(sp.type));
+  if (!matches.length) {
+    await devaSay(`Je n'ai rien dans le Commun pour « ${escapeHtml(sp.name)} » pour l'instant. Je ne t'invente pas de solution.`, 800);
+    revenirEsquisse();
+    offrirCommun();
+    return;
+  }
+  await devaSay(`Voici ce que le Commun propose pour <strong>${escapeHtml(sp.name)}</strong>. Chaque carte vient d'une fiche source. Tu choisis, je ne décide rien.`, 850);
+  matches.slice(0, 3).forEach(sol => glisserCarteSolution(sol, idx));
+  clearComposer();
+}
+
+function revenirEsquisse() {
+  document.body.dataset.mode = 'esquisse';
+  document.getElementById('mode-label').textContent = 'Esquisse';
+}
+
+// Deva fait glisser une carte de solution dans le fil
+function glisserCarteSolution(sol, idx) {
+  const sp = projet.spaces[idx];
+  const row = document.createElement('div');
+  row.className = 'row deva';
+  row.style.maxWidth = '96%';
+  row.innerHTML = `<img class="avatar" src="${AVATAR}" alt="Deva">
+    <div class="sol-card">
+      <div class="sol-head"><span class="sol-ic">${sol.ic}</span>
+        <div class="sol-tx"><div class="sol-titre">${escapeHtml(sol.titre)}</div>
+        <div class="sol-src" title="Source de la fiche">🏷️ ${escapeHtml(sol.source)} · <em>fiche provisoire</em></div></div></div>
+      <button class="sol-more" onclick="toggleSol(this)">Voir la fiche ▾</button>
+      <div class="sol-desc" hidden>${escapeHtml(sol.desc)}</div>
+      <button class="sol-attach" onclick="rattacher('${sol.id}',${idx})">🔗 Rattacher à ${escapeHtml(sp.name)}</button>
+    </div>`;
+  thread.appendChild(row);
+  scrollDown();
+}
+function toggleSol(btn) {
+  const d = btn.nextElementSibling;
+  const open = !d.hidden; d.hidden = open;
+  btn.textContent = open ? 'Voir la fiche ▾' : 'Masquer la fiche ▴';
+}
+
+async function rattacher(solId, idx) {
+  const sol = COMMUN.find(s => s.id === solId), sp = projet.spaces[idx];
+  if (!sol || !sp) return;
+  sp.solution = { id: sol.id, ic: sol.ic, titre: sol.titre, source: sol.source };
+  bubble('me', `Rattacher « ${sol.titre} » à ${sp.name}`);
+  renderPlateau();
+  revenirEsquisse();
+  await devaSequence([
+    [`C'est relié : <strong>${escapeHtml(sol.titre)}</strong> est rattaché à ${escapeHtml(sp.name)}, avec sa source.`, 750],
+    'À la prochaine étape, tu valideras une action réelle et cet espace passera au vert.'
+  ]);
+  offrirCommun();
 }
 
 function retourAccueil() {
@@ -340,7 +440,7 @@ function terWrapHTML() {
     if (sp) {
       cls += ' fill' + (sp.type === 'jardin' ? ' flat' : '');
       style = ` style="--c:${platColor(v)};--cd:${platColor(v, 58)};--cd2:${platColor(v, 48)}"`;
-      if (first.get(v) === i) inner = `<span class="tc-ic">${sp.ic}</span><span class="ter-label">${escapeHtml(sp.name)}</span>`;
+      if (first.get(v) === i) inner = `<span class="tc-ic">${sp.ic}</span><span class="ter-label">${sp.solution ? '🔗 ' : ''}${escapeHtml(sp.name)}</span>`;
     } else if (d === 'chemin') {
       cls += ' deco-chemin';
       if (i >= TER_COLS && deco.get(i - TER_COLS) === 'chemin') cls += ' chem-n';
@@ -369,6 +469,7 @@ function legendHTML() {
       <span class="tl-nm">${sp.ic} ${escapeHtml(sp.name)}</span>
       <span class="tl-n">${n} bloc${n > 1 ? 's' : ''} / ${TER_CELLS}</span>
       <span class="tl-x" title="Retirer" onclick="event.stopPropagation();retirerEspace(${idx})">✕</span>
+      ${sp.solution ? `<span class="tl-sol">🔗 ${escapeHtml(sp.solution.titre)} <em>· ${escapeHtml(sp.solution.source)}</em></span>` : ''}
     </button>`;
   }).join('')}</div>`;
 }
