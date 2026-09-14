@@ -14,6 +14,8 @@ const VISION_VIDEO_URL = '';        // à remplacer par l'URL réelle quand elle
 const projet = {
   prenom: '',
   intention: null,   // 'creer' | 'visiter' | 'solutions' | 'rejoindre'
+  vue: { rot: 24, zoom: 1 },
+  cases: {},         // index de case -> { type, solution, statut } (rempli aux étapes suivantes)
 };
 
 const thread   = document.getElementById('thread');
@@ -158,14 +160,95 @@ async function choose(key) {
   projet.intention = key;
   bubble('me', PORTE_LABEL[key]);
   if (key === 'creer') {
-    // La bascule (Deva se décale à gauche, le plateau s'ouvre) arrive à l'étape 2.
-    await devaSequence([
-      ['Parfait. On va esquisser ton lieu ensemble.', 700],
-      'La suite (le plateau s\'ouvre à droite pendant que je me décale) arrive à la prochaine étape.'
-    ]);
+    await devaSay('Parfait. Je te fais de la place, le plateau s\'ouvre à droite.', 650);
+    ouvrirEsquisse();
   } else {
     await devaSay('Cette porte viendra plus tard. Pour cette démonstration, prenons plutôt <strong>Créer un projet</strong>.', 750);
     stepIntention();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Étape 2 — La bascule : Deva se décale à gauche, la fenêtre d'outil
+   s'ouvre à droite. Deva persiste et continue de parler. On peut
+   revenir à l'accueil (changer d'intention) à tout moment.
+   ═══════════════════════════════════════════════════════════════ */
+
+async function ouvrirEsquisse() {
+  clearComposer();
+  document.getElementById('tool-name').textContent = 'Esquisse';
+  document.getElementById('tool-sub').textContent = 'le plateau de ton projet';
+  renderPlateau();
+  // la bascule : on change de phase (CSS anime la largeur des colonnes)
+  document.body.dataset.phase = 'outil';
+  document.body.dataset.mode = 'esquisse';
+  document.getElementById('mode-label').textContent = 'Esquisse';
+  document.getElementById('tool-panel').setAttribute('aria-hidden', 'false');
+  await devaSay('Voilà ton plateau. Je reste ici, à gauche. Bientôt, tu y poseras tes espaces.', 850);
+}
+
+function retourAccueil() {
+  document.body.dataset.phase = 'accueil';
+  document.body.dataset.mode = 'accueil';
+  document.getElementById('mode-label').textContent = 'Accueil';
+  document.getElementById('tool-panel').setAttribute('aria-hidden', 'true');
+  projet.intention = null;
+  stepIntention();
+}
+document.getElementById('back-btn').addEventListener('click', retourAccueil);
+
+/* ═══════════════════════════════════════════════════════════════
+   Le plateau (moteur repris du jeu EVAD, grille 12×10). Vide pour
+   l'instant : poser des cases arrive à l'étape 3.
+   ═══════════════════════════════════════════════════════════════ */
+const TER_COLS = 12, TER_ROWS = 10, TER_CELLS = TER_COLS * TER_ROWS;
+
+function plateauHTML() {
+  const { rot, zoom } = projet.vue;
+  const hash = i => { let x = (i + 7) * 2654435761; x ^= x >>> 13; return (x * 2246822519) >>> 0; };
+  let cells = '';
+  for (let i = 0; i < TER_CELLS; i++) {
+    let cls = 'ter-cell' + ((((i % TER_COLS) + ((i / TER_COLS) | 0)) % 2) ? ' alt' : '');
+    if (hash(i) % 7 === 0) cls += ' r1';
+    cells += `<div class="${cls}" data-i="${i}"></div>`;
+  }
+  return `<div class="plateau-wrap"><div class="ter-wrap">
+      <div class="ter-grid live" style="--rot:${rot}deg;--zoom:${zoom}">${cells}</div>
+      <div class="ter-dusk"></div><span class="ter-fly">🦋</span>
+      <div class="ter-zoom"><button onclick="plateauZoom(-1)" title="Réduire">−</button><button onclick="plateauZoom(1)" title="Agrandir">+</button></div>
+    </div></div>`;
+}
+function renderPlateau() {
+  const el = document.getElementById('tool-body'); if (!el) return;
+  el.innerHTML = plateauHTML();
+  bindPlateau(el.querySelector('.ter-grid'));
+}
+function plateauZoom(d) {
+  const v = projet.vue;
+  v.zoom = Math.round(Math.max(.6, Math.min(1.4, v.zoom + d * .15)) * 100) / 100;
+  const gr = document.querySelector('.ter-grid.live'); if (gr) gr.style.setProperty('--zoom', v.zoom);
+}
+let ORB = null, ORB_GLOBAL = false;
+function bindPlateau(grid) {
+  if (!grid) return;
+  const wrap = grid.closest('.ter-wrap');
+  if (!ORB_GLOBAL) {
+    ORB_GLOBAL = true;
+    const move = x => {
+      if (ORB == null) return;
+      projet.vue.rot = Math.round(Math.max(0, Math.min(48, ORB.base + (x - ORB.x) * 0.22)) * 10) / 10;
+      const gr = document.querySelector('.ter-grid.live'); if (gr) gr.style.setProperty('--rot', projet.vue.rot + 'deg');
+    };
+    window.addEventListener('mousemove', e => { if (ORB != null && (e.buttons & 1)) move(e.clientX); });
+    window.addEventListener('touchmove', e => { if (ORB != null && e.touches[0]) move(e.touches[0].clientX); }, { passive: true });
+    window.addEventListener('mouseup', () => { ORB = null; });
+    window.addEventListener('touchend', () => { ORB = null; });
+  }
+  if (wrap) {
+    const start = (t, x) => { if (t.closest('.ter-zoom')) return false; ORB = { x, base: projet.vue.rot }; return true; };
+    wrap.addEventListener('mousedown', e => { if (e.button === 0 && start(e.target, e.clientX)) e.preventDefault(); });
+    wrap.addEventListener('touchstart', e => { const t = e.touches[0]; if (t) start(e.target, t.clientX); }, { passive: true });
+    wrap.addEventListener('dblclick', () => { projet.vue.rot = 24; projet.vue.zoom = 1; grid.style.setProperty('--rot', '24deg'); grid.style.setProperty('--zoom', '1'); });
   }
 }
 

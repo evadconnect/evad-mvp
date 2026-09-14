@@ -33,27 +33,32 @@
       height: 100dvh; overflow: hidden; -webkit-font-smoothing: antialiased;
     }
 
-    /* ═══ La surface : une colonne (accueil), deux plus tard (outil) ═══ */
-    .surface { display: flex; height: 100dvh; }
+    /* ═══ La surface : une colonne (accueil), deux colonnes (outil) ═══
+       La bascule anime la largeur des colonnes : Deva "fait de la place". */
+    .surface { display: grid; grid-template-columns: 1fr 0fr; height: 100dvh;
+      transition: grid-template-columns .6s cubic-bezier(.4,0,.2,1); }
+    [data-phase="outil"] .surface { grid-template-columns: minmax(320px, 380px) 1fr; }
 
-    /* ─── Deva : le panneau conversation (plein écran en phase accueil) ─── */
-    .deva-panel { flex: 1; display: flex; flex-direction: column; min-width: 0;
+    /* ─── Deva : le panneau conversation ─── */
+    .deva-panel { display: flex; flex-direction: column; min-width: 0; overflow: hidden;
       max-width: 640px; margin: 0 auto; width: 100%; }
+    [data-phase="outil"] .deva-panel { max-width: none; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--cream) 40%, #fff); }
 
     .deva-head { display: flex; align-items: center; gap: .6rem; padding: .8rem 1.1rem .5rem; }
     .deva-head img.logo { height: 24px; }
     .deva-head .name { font-weight: 700; letter-spacing: .04em; color: var(--forest); font-size: .95rem; }
+    .deva-head .back { border: 1px solid var(--line); background: #fff; color: var(--moss); font-family: inherit;
+      font-size: .72rem; font-weight: 700; border-radius: 100px; padding: .3rem .7rem; cursor: pointer; display: none; }
+    .deva-head .back:hover { border-color: var(--fern); }
+    [data-phase="outil"] .deva-head .back { display: inline-block; }
     .deva-head .mode-dot { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; font-size: .7rem; font-weight: 700; color: var(--moss); }
     .deva-head .mode-dot i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 
-    /* le fil, consultable : il défile, il reste la mémoire du projet */
     .thread { flex: 1; overflow-y: auto; padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: .85rem; }
-
     .row { display: flex; gap: .55rem; align-items: flex-end; animation: rise .3s ease both; }
-    .row.deva { align-self: flex-start; max-width: 90%; }
-    .row.me   { align-self: flex-end; flex-direction: row-reverse; max-width: 85%; }
+    .row.deva { align-self: flex-start; max-width: 92%; }
+    .row.me   { align-self: flex-end; flex-direction: row-reverse; max-width: 88%; }
     @keyframes rise { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
-
     .avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
       background: var(--fern); border: 2px solid #fff; box-shadow: 0 4px 10px -4px rgba(20,67,46,.5); }
     .bubble { padding: .8rem 1rem; border-radius: 18px; font-size: 1.02rem; line-height: 1.45; }
@@ -61,25 +66,21 @@
     .me   .bubble { background: var(--fern); color: #fff; border-bottom-right-radius: 6px; }
     .bubble strong { color: var(--moss); }
     .me .bubble strong { color: #fff; }
-
     .typing { display: inline-flex; gap: 5px; padding: .2rem 0; }
     .typing span { width: 8px; height: 8px; border-radius: 50%; background: var(--fern); opacity: .5; animation: blink 1.2s infinite; }
     .typing span:nth-child(2) { animation-delay: .2s; }
     .typing span:nth-child(3) { animation-delay: .4s; }
     @keyframes blink { 0%,60%,100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 
-    /* carte vidéo Vision (présentation optionnelle) */
     .video-card { background: var(--paper); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; box-shadow: var(--shadow); }
     .video-frame { aspect-ratio: 16/9; background: linear-gradient(135deg, var(--forest), var(--fern)); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; gap: .4rem; text-align: center; padding: 1rem; }
     .video-frame .play { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,.16); border: 2px solid rgba(255,255,255,.6); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
     .video-frame small { opacity: .82; font-size: .72rem; max-width: 82%; }
     .video-card .cap { padding: .7rem 1rem; font-size: .82rem; opacity: .78; }
 
-    /* ─── Le composer : puces de réponse + champ (dans le fil) ─── */
     .composer { padding: .7rem 1.1rem calc(.9rem + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: .55rem; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--cream) 55%, #fff); }
     .composer.hidden { display: none; }
     .chips { display: flex; flex-direction: column; gap: .5rem; }
-
     .btn { font-family: inherit; font-size: 1rem; font-weight: 650; padding: .9rem 1rem; border-radius: 16px;
       border: 2px solid transparent; cursor: pointer; text-align: left; display: flex; align-items: center; gap: .65rem; width: 100%;
       transition: transform .12s ease, background .12s ease, border-color .12s; }
@@ -92,26 +93,74 @@
     .btn-gold:hover { filter: brightness(.96); }
     .btn-ghost { background: var(--paper); color: var(--forest); border-color: var(--line); }
     .btn-ghost:hover { border-color: var(--fern); }
-
     .field { display: flex; gap: .5rem; }
     .field input { flex: 1; font-family: inherit; font-size: 1.05rem; padding: .85rem 1rem; border: 2px solid var(--line); border-radius: 16px; background: #fff; color: var(--ink); }
     .field input:focus { outline: none; border-color: var(--fern); }
     .field .send { flex: none; border: none; background: var(--fern); color: #fff; border-radius: 16px; width: 54px; font-size: 1.3rem; cursor: pointer; }
     .field .send:hover { background: var(--moss); }
+
+    /* ═══ La fenêtre d'outil (à droite) ═══ */
+    .tool-panel { min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .tool-head { display: flex; align-items: center; gap: .5rem; padding: .8rem 1.1rem; border-bottom: 1px solid var(--line); }
+    .tool-head .t-accent { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); flex: none; }
+    .tool-head .t-name { font-weight: 800; color: var(--forest); font-size: .95rem; }
+    .tool-head .t-sub { font-size: .72rem; color: var(--moss); opacity: .7; margin-left: .3rem; }
+    .tool-body { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
+    .plateau-wrap { width: 100%; max-width: 520px; }
+
+    /* ─── Le plateau (repris du jeu EVAD) ─── */
+    .ter-wrap { position: relative; background: linear-gradient(180deg,#cfe6f4 0%,#e7f5ec 62%);
+      border: 1px solid var(--line); border-radius: 26px; padding: 1.6rem .8rem 1.7rem;
+      box-shadow: var(--shadow); perspective: 820px; perspective-origin: 50% 34%; overflow: hidden; }
+    .ter-wrap::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--accent); opacity: .5; }
+    .ter-grid { --rot: 24deg; --zoom: 1; position: relative; display: grid;
+      grid-template-columns: repeat(12,minmax(0,1fr)); gap: 2px; max-width: 352px; margin: 0 auto;
+      transform: rotateX(54deg) rotateZ(var(--rot)) scale(var(--zoom)); transform-style: preserve-3d;
+      transform-origin: 50% 62%; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+    .ter-grid::before { content: ''; position: absolute; inset: -8px; transform: translateZ(-14px); border-radius: 12px;
+      background: linear-gradient(180deg,#b9d5ab,#9dbf90); box-shadow: 0 28px 36px -14px rgba(13,43,34,.5); }
+    .ter-grid::after { content: ''; position: absolute; left: -8px; right: -8px; top: calc(100% + 8px); height: 16px;
+      transform-origin: top; transform: rotateX(-90deg); border-radius: 0 0 12px 12px;
+      background: linear-gradient(180deg,#8fae7e 0 3px,#a5814f 3px 55%,#7c5f38 55% 82%,#69543a 82%); }
+    .ter-cell { position: relative; aspect-ratio: 1; border-radius: 2px; --h: 0px; --c: #bfd6b2; background: var(--c);
+      transform: translateZ(var(--h)); transform-style: preserve-3d; box-shadow: inset 0 0 0 1px rgba(13,43,34,.05); transition: transform .14s, box-shadow .12s; }
+    .ter-cell.alt { --c: #b5cea7; }
+    .ter-cell.r1 { --h: 1.5px; }
+    .ter-grid.live .ter-cell:hover { transform: translateZ(5px); box-shadow: inset 0 0 0 1px rgba(13,43,34,.28); }
+    .tc-ic { display: inline-block; transform: rotateZ(calc(-1*var(--rot,0deg))) rotateX(-54deg) scale(1.25); transform-origin: 50% 90%; pointer-events: none; filter: drop-shadow(0 2px 1.5px rgba(0,0,0,.3)); }
+    .ter-fly { position: absolute; font-size: 12px; pointer-events: none; z-index: 3; animation: terFlyA 26s linear infinite; }
+    @keyframes terFlyA { 0% { left: -4%; top: 64%; } 22% { left: 24%; top: 36%; } 48% { left: 54%; top: 58%; } 74% { left: 78%; top: 32%; } 100% { left: 104%; top: 50%; } }
+    .ter-dusk { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; z-index: 2;
+      background: linear-gradient(180deg,rgba(52,62,118,.6),rgba(255,140,60,.35)); mix-blend-mode: multiply; opacity: 0; animation: terDusk 150s linear infinite; }
+    @keyframes terDusk { 0%,58% { opacity: 0; } 68%,82% { opacity: .3; } 92%,100% { opacity: 0; } }
+    .ter-zoom { position: absolute; right: .55rem; top: .55rem; display: flex; gap: .3rem; z-index: 5; }
+    .ter-zoom button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--moss); font-weight: 800; cursor: pointer; font-family: var(--font); font-size: 1rem; }
+    .ter-zoom button:hover { border-color: var(--fern); }
+
+    /* ─── Repli mobile : Deva en bandeau haut, l'outil dessous ─── */
+    @media (max-width: 720px) {
+      [data-phase="outil"] .surface { grid-template-columns: 1fr; grid-template-rows: minmax(0, 40dvh) 1fr; }
+      [data-phase="outil"] .deva-panel { border-right: none; border-bottom: 1px solid var(--line); }
+    }
   </style>
 </head>
-<body data-mode="accueil">
+<body data-mode="accueil" data-phase="accueil">
   <div class="surface">
     <section class="deva-panel">
       <div class="deva-head">
         <img class="logo" src="img/evad-logo.png" alt="EVAD">
         <span class="name">EVAD</span>
+        <button class="back" id="back-btn" type="button" title="Revenir à l'accueil">◀ Changer</button>
         <span class="mode-dot"><i></i><span id="mode-label">Accueil</span></span>
       </div>
       <div class="thread" id="thread" aria-live="polite"></div>
       <div class="composer hidden" id="composer"></div>
     </section>
-    <!-- La fenêtre d'outil s'ouvrira ici à l'étape 2 (Deva se décale à gauche) -->
+
+    <main class="tool-panel" id="tool-panel" aria-hidden="true">
+      <div class="tool-head"><span class="t-accent"></span><span class="t-name" id="tool-name">Esquisse</span><span class="t-sub" id="tool-sub">le plateau de ton projet</span></div>
+      <div class="tool-body" id="tool-body"></div>
+    </main>
   </div>
 
   <script src="js/deva.js"></script>
