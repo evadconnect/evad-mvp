@@ -14,12 +14,18 @@ const VISION_VIDEO_URL = '';        // à remplacer par l'URL réelle quand elle
 const projet = {
   prenom: '',
   intention: null,   // 'creer' | 'visiter' | 'solutions' | 'rejoindre'
+  nom: '',
   vue: { rot: 24, zoom: 1 },
-  cases: {},         // index de case -> { type, solution, statut } (rempli aux étapes suivantes)
+  zones: [],         // { id, type, ic, label, cells:[i...], anchor:i, statut:'projete'|'realise' }
 };
 
 const thread   = document.getElementById('thread');
 const composer = document.getElementById('composer');
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 /* ── Affichage du fil ───────────────────────────────────────── */
 function scrollDown() {
@@ -177,14 +183,98 @@ async function choose(key) {
 async function ouvrirEsquisse() {
   clearComposer();
   document.getElementById('tool-name').textContent = 'Esquisse';
-  document.getElementById('tool-sub').textContent = 'le plateau de ton projet';
+  document.getElementById('tool-sub').textContent = 'la maquette de ton projet';
   renderPlateau();
   // la bascule : on change de phase (CSS anime la largeur des colonnes)
   document.body.dataset.phase = 'outil';
   document.body.dataset.mode = 'esquisse';
   document.getElementById('mode-label').textContent = 'Esquisse';
   document.getElementById('tool-panel').setAttribute('aria-hidden', 'false');
-  await devaSay('Voilà ton plateau. Je reste ici, à gauche. Bientôt, tu y poseras tes espaces.', 850);
+  await devaSay('Voilà ta maquette, encore vide. Je te pose quelques questions et je la dessine au fur et à mesure.', 850);
+  stepNomLieu();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Étape 3 — Deva mène l'entretien et remplit la maquette. Les espaces
+   se posent en GRIS PROJETÉ (le projet rêvé). Deva questionne le
+   projet, jamais la personne.
+   ═══════════════════════════════════════════════════════════════ */
+
+// Les espaces que Deva peut poser (esquisse basse fidélité)
+const ESPACES = [
+  { type: 'jardin',  ic: '🌿', label: 'Jardin' },
+  { type: 'cuisine', ic: '🍳', label: 'Cuisine' },
+  { type: 'atelier', ic: '🔨', label: 'Atelier' },
+  { type: 'cafe',    ic: '☕', label: 'Café' },
+];
+// Emplacements successifs sur la grille 12×10 (blocs 2 lignes × 3 colonnes)
+const SLOTS = [
+  { r: [1, 2], c: [1, 3] }, { r: [1, 2], c: [6, 8] },
+  { r: [5, 6], c: [1, 3] }, { r: [5, 6], c: [6, 8] },
+];
+
+async function stepNomLieu() {
+  await devaSay('Pour commencer, comment s\'appelle ton lieu, ou ton projet ?', 650);
+  showChips(box => {
+    const f = document.createElement('form');
+    f.className = 'field';
+    f.innerHTML = `<input type="text" id="nom-lieu" placeholder="Nom du lieu" aria-label="Nom du lieu"><button class="send" type="submit" aria-label="Valider">→</button>`;
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      const v = f.querySelector('input').value.trim();
+      if (!v) return;
+      projet.nom = v;
+      bubble('me', v);
+      document.getElementById('tool-sub').textContent = v;
+      stepEspaces(true);
+    });
+    box.appendChild(f);
+    setTimeout(() => f.querySelector('input').focus(), 80);
+  });
+}
+
+async function stepEspaces(first) {
+  const restants = ESPACES.filter(e => !projet.zones.some(z => z.type === e.type));
+  const plein = projet.zones.length >= SLOTS.length;
+  if (first) await devaSay(`Bien. Maintenant, qu'est-ce qu'on trouvera dans <strong>${escapeHtml(projet.nom)}</strong> ? Choisis un espace, je le pose sur la maquette.`, 800);
+  else await devaSay(plein ? 'La maquette est bien remplie. On s\'arrête là ?' : 'Un autre espace, ou on s\'arrête là ?', 650);
+
+  if (!restants.length || plein) {
+    showChips(box => box.appendChild(chip('btn-ghost', '✓', 'Terminer la maquette', '', finEsquisse)));
+    return;
+  }
+  showChips(box => {
+    restants.forEach(e => box.appendChild(chip('btn-primary', e.ic, e.label, 'Le poser sur la maquette', () => poserEspace(e))));
+    if (projet.zones.length) box.appendChild(chip('btn-ghost', '✓', 'Terminer', '', finEsquisse));
+  });
+}
+
+async function poserEspace(e) {
+  bubble('me', e.label);
+  const slot = SLOTS[projet.zones.length];
+  const cells = [];
+  for (let r = slot.r[0]; r <= slot.r[1]; r++) for (let c = slot.c[0]; c <= slot.c[1]; c++) cells.push(r * TER_COLS + c);
+  const zone = { id: 'z' + projet.zones.length, type: e.type, ic: e.ic, label: e.label, cells, anchor: cells[0], statut: 'projete' };
+  projet.zones.push(zone);
+  renderPlateau();
+  pulseZone(zone);                    // Deva pointe : pulsation discrète
+  await devaSay(`Je pose le <strong>${e.label.toLowerCase()}</strong> sur la maquette, en gris pour l'instant : c'est le projet rêvé.`, 800);
+  stepEspaces(false);
+}
+
+async function finEsquisse() {
+  const n = projet.zones.length;
+  await devaSay(`Belle maquette : ${n} espace${n > 1 ? 's' : ''} posé${n > 1 ? 's' : ''}, en gris projeté.`, 700);
+  await devaSay('À la prochaine étape, on reliera un espace à une solution du Commun, puis une action validée le fera passer au vert.', 850);
+}
+
+function pulseZone(zone) {
+  requestAnimationFrame(() => {
+    zone.cells.forEach(i => {
+      const cell = document.querySelector(`.ter-grid.live .ter-cell[data-i="${i}"]`);
+      if (cell) { cell.classList.add('pulse'); setTimeout(() => cell.classList.remove('pulse'), 2400); }
+    });
+  });
 }
 
 function retourAccueil() {
@@ -206,11 +296,19 @@ const TER_COLS = 12, TER_ROWS = 10, TER_CELLS = TER_COLS * TER_ROWS;
 function plateauHTML() {
   const { rot, zoom } = projet.vue;
   const hash = i => { let x = (i + 7) * 2654435761; x ^= x >>> 13; return (x * 2246822519) >>> 0; };
+  // carte des cases occupées : index -> { zone, anchor:bool }
+  const occ = new Map();
+  projet.zones.forEach(z => z.cells.forEach(i => occ.set(i, { zone: z, anchor: i === z.anchor })));
   let cells = '';
   for (let i = 0; i < TER_CELLS; i++) {
+    const o = occ.get(i);
     let cls = 'ter-cell' + ((((i % TER_COLS) + ((i / TER_COLS) | 0)) % 2) ? ' alt' : '');
-    if (hash(i) % 7 === 0) cls += ' r1';
-    cells += `<div class="${cls}" data-i="${i}"></div>`;
+    let inner = '';
+    if (o) {
+      cls += ' projete' + (o.zone.statut === 'realise' ? ' vert' : '');
+      if (o.anchor) inner = `<span class="tc-ic">${o.zone.ic}</span><span class="ter-label">${escapeHtml(o.zone.label)}</span>`;
+    } else if (hash(i) % 7 === 0) cls += ' r1';
+    cells += `<div class="${cls}" data-i="${i}">${inner}</div>`;
   }
   return `<div class="plateau-wrap"><div class="ter-wrap">
       <div class="ter-grid live" style="--rot:${rot}deg;--zoom:${zoom}">${cells}</div>
